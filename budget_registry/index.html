@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Registry System</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/budget.css">
+<!-- CORRECT ORDER (defer executes in document order) -->
+<script src="assets/js/api-client.js" defer></script>
+<script src="assets/js/data.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+<script src="assets/js/allotments.js" defer></script>
+<script src="assets/js/disbursements.js" defer></script>
+<script src="assets/js/earmarks.js" defer></script>
+<script src="assets/js/modal-guard.js" defer></script>
+<script src="assets/js/obligations.js" defer></script>
+<script src="assets/js/rc.js" defer></script>
+<script src="assets/js/reference.js" defer></script>
+<script src="assets/js/render.js" defer></script>
+<script src="assets/js/reports.js" defer></script>
+<script src="assets/js/settings.js" defer></script>
+<script src="assets/js/reports-filter.js" defer></script>
+<script src="assets/js/release.js" defer></script>
+<script src="assets/js/pr-monitor-nav-patch.js" defer></script>
+  <style>
+    /* ── PR Monitoring Module ─────────────────────────────── */
+    #sec-prmonitor .prm-selected td { background: var(--blue-light) !important; }
+    #prm-tbody tr:hover td { background: var(--surface); }
+
+    /* Print button variant */
+    .act-btn.a-print {
+      background: var(--green-light);
+      color: var(--green);
+      border-color: var(--green-mid);
+    }
+    .act-btn.a-print:hover { background: var(--green-mid); }
+
+    /* Red stat icon */
+    .si-red { background: var(--red-light); color: var(--red); }
+
+    /* PR monitoring filter row overflow */
+    #sec-prmonitor .table-scroll table { min-width: 1200px; }
+
+    /* Sortable column header hover */
+    #sec-prmonitor table thead th[onclick]:hover {
+      background: rgba(0,0,0,.04);
+    }
+
+    /* Bulk bar */
+    #prm-bulk-bar { flex-wrap: wrap; }
+
+    /* Make badges in prm table not wrap */
+    #prm-tbody .badge { white-space: nowrap; }
+
+    /* Status badges for new statuses */
+    .badge.b-red   { background: var(--red-light);    color: var(--red);    border: 1px solid var(--red-mid); }
+    .badge.b-orange{ background: var(--orange-light);  color: var(--orange); border: 1px solid var(--orange-mid, #fcd34d); }
+
+    /* Ensure nav badge shows */
+    #nav-prmonitor { position: relative; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="position:fixed;inset:0;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);z-index:10000;display:flex;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:36px 40px;width:380px;box-shadow:0 25px 50px rgba(0,0,0,.3)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:52px;height:52px;background:var(--blue);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;margin-bottom:12px">BR</div>
+      <h1 style="font-size:20px;font-weight:700;color:var(--text)">Budget Registry</h1>
+      <p style="font-size:13px;color:var(--text2);margin-top:3px">Philippine Government Budget System</p>
+    </div>
+    <div id="loginError" style="display:none;background:var(--red-light);border:1px solid var(--red-mid);color:var(--red);border-radius:8px;padding:9px 13px;font-size:13px;margin-bottom:14px"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px">Username</label>
+        <input id="loginUser" type="text" placeholder="admin" autocomplete="username"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:8px;font-size:14px;font-family:var(--font);outline:none"
+          >
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px">Password</label>
+        <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:8px;font-size:14px;font-family:var(--font);outline:none"
+          >
+      </div>
+      <button onclick="doLogin()" id="loginBtn"
+        style="background:var(--blue);color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);margin-top:4px;transition:all .15s;opacity:1"
+        onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='var(--blue)'"
+        onkeydown="if(event.key==='Enter')doLogin()">
+        Sign In
+      </button>
+    </div>
+    <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:18px">Default: admin / admin1234</p>
+  </div>
+</div>
+
+<!-- LOADER -->
+<div class="app-loader" id="appLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text" id="loaderText">Connecting to database...</div>
+</div>
+
+<!-- SAVING -->
+<div class="saving" id="savingIndicator"><div class="saving-dot"></div>Saving...</div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">BR</div>
+    <div class="logo-text"><h2>Budget Registry</h2><p>Management System</p></div>
+  </div>
+  <nav class="nav-section">
+    <div class="nav-label">Modules</div>
+    <div class="nav-item" onclick="nav('dashboard')" id="nav-dashboard"><span class="nav-icon">🏠</span><span class="nav-text">Dashboard</span></div>
+    <div class="nav-item active" onclick="nav('rc')" id="nav-rc"><span class="nav-icon">🏢</span><span class="nav-text">Responsibility Centers</span><span class="nav-badge" id="badge-rc">0</span></div>
+    <div class="nav-item" onclick="nav('allotment')" id="nav-allotment"><span class="nav-icon">💰</span><span class="nav-text">Allotments</span><span class="nav-badge" id="badge-allotment">0</span></div>
+    <div class="nav-item" onclick="nav('earmarked')" id="nav-earmarked"><span class="nav-icon">📋</span><span class="nav-text">Earmarked</span><span class="nav-badge" id="badge-earmarked">0</span></div>
+    <div class="nav-item" onclick="nav('prmonitor')" id="nav-prmonitor"><span class="nav-icon">📤</span><span class="nav-text">PR Monitoring</span><span class="nav-badge" id="badge-prmonitor">0</span></div>
+    <div class="nav-item" onclick="nav('obligations')" id="nav-obligations"><span class="nav-icon">📝</span><span class="nav-text">Obligations</span><span class="nav-badge" id="badge-obligations">0</span></div>
+    <div class="nav-item" onclick="nav('disbursement')" id="nav-disbursement"><span class="nav-icon">💵</span><span class="nav-text">Disbursements</span><span class="nav-badge" id="badge-disbursement">0</span></div>
+    <div class="nav-label" style="margin-top:8px">Configuration</div>
+    <div class="nav-item" onclick="nav('reports')" id="nav-reports"><span class="nav-icon">📊</span><span class="nav-text">Reports</span></div>
+    <div class="nav-item" onclick="nav('settings')" id="nav-settings"><span class="nav-icon">🗂️</span><span class="nav-text">Reference Data</span></div>
+    <div class="nav-item" onclick="nav('sysconfig')" id="nav-sysconfig"><span class="nav-icon">⚙️</span><span class="nav-text">System Settings</span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Workflow</div>
+    <div class="workflow-steps">
+      <div class="workflow-step done"><div class="workflow-step-dot"></div><span style="font-size:11px">Responsibility Centers</span></div>
+      <div class="workflow-step"><div class="workflow-step-dot"></div><span style="font-size:11px">Allotments</span></div>
+      <div class="workflow-step"><div class="workflow-step-dot"></div><span style="font-size:11px">Earmarked Funds</span></div>
+      <div class="workflow-step"><div class="workflow-step-dot"></div><span style="font-size:11px">Obligations</span></div>
+      <div class="workflow-step"><div class="workflow-step-dot"></div><span style="font-size:11px">Disbursements</span></div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="topbar-title">Responsibility Centers</span>
+    <div class="topbar-right">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
+        <span>FY</span>
+        <select id="fy-select" onchange="applyFYFilter()" style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:white;font-family:var(--font)">
+          <option value="">All Years</option>
+        </select>
+      </div>
+      <div class="db-status" id="dbStatus"><div class="db-dot" id="dbDot"></div><span id="dbStatusText">Connecting...</span></div>
+      <span class="topbar-date" id="topbar-date"></span>
+      <div id="topbar-user" style="display:none;align-items:center;gap:8px;font-size:12px">
+        <span style="background:var(--blue-light);color:var(--blue);border-radius:20px;padding:3px 10px;font-weight:500" id="topbar-username"></span>
+        <button onclick="doLogout()" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px">Sign Out</button>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- ════════════ DASHBOARD ════════════ -->
+    <div class="section" id="sec-dashboard">
+      <div class="section-header">
+        <h1>Dashboard</h1>
+        <p>Budget execution overview at a glance</p>
+      </div>
+
+      <!-- Summary KPI cards -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)" id="dash-kpi-grid">
+        <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3>Total Allotment</h3><p id="dash-kpi-allotment">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-purple">📝</div><div class="stat-info"><h3>Total Obligated</h3><p id="dash-kpi-obligated">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-cyan">💵</div><div class="stat-info"><h3>Total Disbursed</h3><p id="dash-kpi-disbursed">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-orange">📋</div><div class="stat-info"><h3>Unobligated Balance</h3><p id="dash-kpi-unobligated">₱0</p></div></div>
+      </div>
+
+      <!-- Utilization gauges -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="table-card" style="padding:18px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text)">Overall Budget Utilization</div>
+          <div id="dash-util-bars"></div>
+        </div>
+        <div class="table-card" style="padding:18px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text)">Obligations by Type</div>
+          <div id="dash-ob-type-bars"></div>
+        </div>
+      </div>
+
+      <!-- Top RCs + Alerts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="table-card">
+          <div class="table-card-header"><h3>Top 5 RCs by Obligation</h3></div>
+          <div id="dash-top-rcs" style="padding:14px"></div>
+        </div>
+        <div class="table-card">
+          <div class="table-card-header"><h3>⚠️ Budget Alerts</h3></div>
+          <div id="dash-alerts" style="padding:14px"></div>
+        </div>
+      </div>
+
+      <!-- Recent activity -->
+      <div class="table-card">
+        <div class="table-card-header"><h3>Recent Obligations</h3></div>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Date</th><th>OBR #</th><th>Type</th><th>Payee</th><th>RC</th><th>Amount</th><th>Disbursed</th></tr></thead>
+          <tbody id="dash-recent-ob"></tbody>
+        </table></div>
+      </div>
+
+    </div><!-- end sec-dashboard -->
+
+    <!-- RC -->
+    <div class="section active" id="sec-rc">
+      <div class="section-header"><h1>Responsibility Centers</h1><p>Define organizational units — the foundation for all budget operations</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon si-blue">🏢</div><div class="stat-info"><h3>Total Centers</h3><p id="rc-total">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">📘</div><div class="stat-info"><h3>GAA</h3><p id="rc-gaa">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-purple">📗</div><div class="stat-info"><h3>SARO</h3><p id="rc-saro">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-orange">📙</div><div class="stat-info"><h3>ASA</h3><p id="rc-asa">0</p></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="search-input" id="rc-search" placeholder="Search by RC name, payee, type..." oninput="debounce(renderRC)()"></div>
+        <button class="btn btn-primary" onclick="openRCModal()">+ Add RC</button>
+        <button class="btn btn-outline" onclick="exportData('rc')">↓ Export</button>
+        <button class="btn btn-outline" onclick="openImportModal('rc')">↑ Import</button>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Records</h3><span id="rc-count-lbl" style="font-size:12px;color:var(--text3)"></span></div>
+        <div class="table-scroll"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Payee</th><th>RC Name</th><th>Project</th><th>Expense Classes</th><th>Utilization</th><th>Actions</th></tr></thead><tbody id="rc-tbody"></tbody></table></div><div id="rc-pager" class="table-pager"></div>
+      </div>
+    </div>
+
+    <!-- ALLOTMENT -->
+    <div class="section" id="sec-allotment">
+      <div class="section-header"><h1>Allotments</h1><p>Assign budget amounts to responsibility centers</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon si-cyan">💰</div><div class="stat-info"><h3>Total Authorized</h3><p id="al-authorized">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-blue">📊</div><div class="stat-info"><h3>Total Adjusted</h3><p id="al-adjusted">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>Total Allotted</h3><p id="al-allotted">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-orange">⏳</div><div class="stat-info"><h3>Unreleased</h3><p id="al-unreleased">₱0</p></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="search-input" id="al-search" placeholder="Search allotments..." oninput="debounce(renderAllotment)()"></div>
+        <button class="btn btn-cyan" onclick="openAllotmentModal()">+ Add Allotment</button>
+        <button class="btn btn-outline" onclick="exportData('allotment')">↓ Export</button>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Allotment Records</h3></div>
+        <div class="table-scroll"><table><thead><tr><th>RC</th><th>Fund Cluster</th><th>Authorized</th><th>Adjustment</th><th>Adjusted</th><th>Allotment Received</th><th>Unreleased</th><th>Actions</th></tr></thead><tbody id="al-tbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- EARMARKED -->
+    <div class="section" id="sec-earmarked">
+      <div class="section-header"><h1>Earmarked Funds</h1><p>Reserve budget for specific procurement requests</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon si-yellow">📋</div><div class="stat-info"><h3>Total Earmarked</h3><p id="em-total">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-blue">📊</div><div class="stat-info"><h3>Records</h3><p id="em-count">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">🔓</div><div class="stat-info"><h3>Available</h3><p id="em-free">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-purple">🔒</div><div class="stat-info"><h3>Obligated</h3><p id="em-obligated">0</p></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="search-input" id="em-search" placeholder="Search earmarks..." oninput="debounce(renderEarmark)()"></div>
+        <button class="btn btn-warning" onclick="openEarmarkModal()">+ Add Earmark</button>
+        <button class="btn btn-outline" onclick="exportData('earmark')">↓ Export</button>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Earmark Records</h3></div>
+        <div class="table-scroll"><table><thead><tr><th>Date</th><th>Earmark #</th><th>Quarter</th><th>RC</th><th>Particulars</th><th>Total Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody id="em-tbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- PR MONITORING -->
+    <div class="section" id="sec-prmonitor">
+      <div class="section-header">
+        <h1>PR Release Monitoring</h1>
+        <p>Track all Purchase Requests — status, approval, and release across every earmark</p>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="stats-grid" style="grid-template-columns:repeat(6,1fr)" id="prm-kpis">
+        <div class="stat-card"><div class="stat-icon si-blue">📋</div><div class="stat-info"><h3>Total PRs</h3><p id="prm-kpi-total">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-yellow">⏳</div><div class="stat-info"><h3>Pending</h3><p id="prm-kpi-pending">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>Approved</h3><p id="prm-kpi-approved">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-cyan">📤</div><div class="stat-info"><h3>Released</h3><p id="prm-kpi-released">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-red">❌</div><div class="stat-info"><h3>Not Approved</h3><p id="prm-kpi-notappr">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-purple">💰</div><div class="stat-info"><h3>Total Amount</h3><p id="prm-kpi-amt" style="font-size:13px">₱0</p></div></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-wrap" style="flex:2">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input class="search-input" id="prm-search" placeholder="Search PR #, earmark, RC, particulars, requisitioner..." oninput="renderPRMonitoring()">
+        </div>
+        <button class="btn btn-primary" onclick="openBulkReleaseModal()">📤 Bulk Update</button>
+        <button class="btn btn-outline" onclick="prmExportCSV()">↓ Export CSV</button>
+        <button class="btn btn-outline" onclick="printAllPRsReport()">🖨 Print Report</button>
+      </div>
+
+      <!-- Filter Row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr) auto auto auto;gap:8px;margin-bottom:10px;align-items:center;">
+        <select id="prm-f-rc" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">All RCs</option>
+        </select>
+        <select id="prm-f-qtr" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">All Quarters</option>
+          <option>1ST Qtr</option><option>2ND Qtr</option><option>3RD Qtr</option><option>4TH Qtr</option>
+        </select>
+        <select id="prm-f-regstatus" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">Registry Status</option>
+          <option>Earmarked</option><option>Not Earmarked</option><option>Obligated</option><option>Cancelled</option><option>N/A</option>
+        </select>
+        <select id="prm-f-prstatus" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">PR Status</option>
+          <option>Pending</option><option>Approved</option><option>Not-Approved</option><option>Budget Approved</option><option>Cancelled</option><option>N/A</option>
+        </select>
+        <select id="prm-f-apstatus" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">Approval Status</option>
+          <option>For Signature: RD</option><option>Signed</option><option>Return to End-User</option><option>Return to BAC</option><option>Approved Budget</option><option>N/A</option>
+        </select>
+        <select id="prm-f-relstatus" onchange="renderPRMonitoring()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--font)">
+          <option value="">Release Status</option>
+          <option>Released to: RDO</option><option>Released to: BAC</option><option>Released to: End-User</option><option>Pending Release</option><option>N/A</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="prmResetFilters()">↺ Reset</button>
+      </div>
+
+      <!-- Bulk Selection Bar -->
+      <div id="prm-bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--radius);margin-bottom:10px;">
+        <span id="prm-bulk-count" style="font-size:12px;color:var(--blue);font-weight:500;flex:1">0 selected</span>
+        <button class="btn btn-outline btn-sm" onclick="prmClearSelection()">Clear</button>
+        <button class="btn btn-primary btn-sm" onclick="openBulkReleaseModal()">📤 Bulk Update Selected</button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3>Purchase Request Records</h3>
+          <span id="prm-row-count" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div class="table-scroll">
+          <table style="min-width:1200px">
+            <thead>
+              <tr>
+                <th style="width:36px"><input type="checkbox" id="prm-select-all" onchange="prmToggleAll(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--blue)"></th>
+                <th onclick="prmSortBy('prNum')" style="cursor:pointer;white-space:nowrap">PR No. ↕</th>
+                <th onclick="prmSortBy('rcName')" style="cursor:pointer;white-space:nowrap">Responsibility Center ↕</th>
+                <th onclick="prmSortBy('particulars')" style="cursor:pointer">Particulars ↕</th>
+                <th onclick="prmSortBy('requisitioner')" style="cursor:pointer;white-space:nowrap">Requisitioner ↕</th>
+                <th onclick="prmSortBy('amount')" style="cursor:pointer;text-align:right;white-space:nowrap">Amount ↕</th>
+                <th onclick="prmSortBy('registryStatus')" style="cursor:pointer;white-space:nowrap">Registry Status ↕</th>
+                <th onclick="prmSortBy('prStatus')" style="cursor:pointer;white-space:nowrap">PR Status ↕</th>
+                <th onclick="prmSortBy('approvalStatus')" style="cursor:pointer;white-space:nowrap">Approval Status ↕</th>
+                <th onclick="prmSortBy('releaseStatus')" style="cursor:pointer;white-space:nowrap">Release ↕</th>
+                <th onclick="prmSortBy('releaseDate')" style="cursor:pointer;white-space:nowrap">Date ↕</th>
+                <th onclick="prmSortBy('signedBy')" style="cursor:pointer;white-space:nowrap">Sign ↕</th>
+                <th style="white-space:nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="prm-tbody">
+              <tr class="empty-row"><td colspan="13">No PR records yet. Add earmarks with lots to begin monitoring.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="prm-pager" class="table-pager"></div>
+      </div>
+    </div><!-- end sec-prmonitor -->
+
+    <!-- OBLIGATIONS -->
+    <div class="section" id="sec-obligations">
+      <div class="section-header"><h1>Obligations</h1><p>Record budget obligations against earmarked or direct allocations</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon si-blue">📝</div><div class="stat-info"><h3>Total Obligated</h3><p id="ob-total">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">📋</div><div class="stat-info"><h3>Records</h3><p id="ob-count">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-purple">💼</div><div class="stat-info"><h3>Creditor</h3><p id="ob-creditor">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-orange">📌</div><div class="stat-info"><h3>Mandatory/Claims</h3><p id="ob-mandatory">0</p></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="search-input" id="ob-search" placeholder="Search obligations..." oninput="debounce(renderObligation)()"></div>
+        <button class="btn btn-purple" onclick="openObligationModal()">+ Add Obligation</button>
+        <button class="btn btn-outline" onclick="exportData('obligation')">↓ Export</button>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Obligation Records</h3></div>
+        <div class="table-scroll"><table><thead><tr><th>Date</th><th>OBR #</th><th>Quarter</th><th>Type</th><th>Payee</th><th>RC</th><th>Particulars</th><th>Amount</th><th>Disbursed</th><th>Balance</th><th>Actions</th></tr></thead><tbody id="ob-tbody"></tbody></table></div>
+      <div id="ob-pager" class="table-pager"></div>
+      </div>
+    </div>
+
+    <!-- DISBURSEMENTS -->
+    <div class="section" id="sec-disbursement">
+      <div class="section-header"><h1>Disbursements</h1><p>Process payments against obligated amounts</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon si-cyan">💵</div><div class="stat-info"><h3>Total Disbursed</h3><p id="db-total">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-blue">🧾</div><div class="stat-info"><h3>Records</h3><p id="db-count">0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">💴</div><div class="stat-info"><h3>Net Total</h3><p id="db-net">₱0</p></div></div>
+        <div class="stat-card"><div class="stat-icon si-orange">🏦</div><div class="stat-info"><h3>TRA Total</h3><p id="db-tra">₱0</p></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="search-input" id="db-search" placeholder="Search disbursements..." oninput="debounce(renderDisbursement)()"></div>
+        <button class="btn btn-cyan" onclick="openDisbursementModal()">+ Add Disbursement</button>
+        <button class="btn btn-outline" onclick="exportData('disbursement')">↓ Export</button>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Disbursement Records</h3></div>
+        <div class="table-scroll"><table><thead><tr><th>Date</th><th>OBR #</th><th>Payee</th><th>Check/LDDAP-ADA #</th><th>Net Disbursement</th><th>TRA</th><th>Total</th><th>Actions</th></tr></thead><tbody id="db-tbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS / REFERENCE DATA -->
+    <div class="section" id="sec-settings">
+      <div class="section-header">
+        <h1>Reference Data</h1>
+        <p>Manage Fund Clusters, Authorization Codes, Fund Categories, Projects, Activities, and Account Codes used across the system</p>
+      </div>
+
+      <!-- TABS -->
+      <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;" id="ref-tabs">
+        <button class="btn btn-primary btn-sm" onclick="refTab('fund')" id="rtab-fund">Fund Structure</button>
+        <button class="btn btn-outline btn-sm" onclick="refTab('project')" id="rtab-project">Projects & Activities</button>
+        <button class="btn btn-outline btn-sm" onclick="refTab('accounts')" id="rtab-accounts">Account Codes</button>
+      </div>
+
+      <!-- TAB: FUND STRUCTURE -->
+      <div id="ref-fund">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+
+          <!-- Fund Clusters -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Fund Clusters</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('fundCluster')">+ Add</button>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th></th></tr></thead>
+            <tbody id="ref-fc-tbody"></tbody></table></div>
+          </div>
+
+          <!-- Auth Codes -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Authorization Codes</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('authCode')">+ Add</button>
+            </div>
+            <div class="form-group" style="padding:10px 14px 0;"><select id="ref-fc-filter" onchange="renderRefAuthCodes()" style="font-size:12px;padding:5px 8px;"><option value="">All Fund Clusters</option></select></div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Cluster</th><th></th></tr></thead>
+            <tbody id="ref-ac-tbody"></tbody></table></div>
+          </div>
+
+          <!-- Fund Categories -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Fund Categories</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('fundCategory')">+ Add</button>
+            </div>
+            <div class="form-group" style="padding:10px 14px 0;"><select id="ref-ac-filter" onchange="renderRefFundCats()" style="font-size:12px;padding:5px 8px;"><option value="">All Auth Codes</option></select></div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Auth Code</th><th></th></tr></thead>
+            <tbody id="ref-cat-tbody"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: PROJECTS & ACTIVITIES -->
+      <div id="ref-project" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+
+          <!-- Projects -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Projects / Programs</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('project')">+ Add</button>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th></th></tr></thead>
+            <tbody id="ref-proj-tbody"></tbody></table></div>
+          </div>
+
+          <!-- Project Categories -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Project Categories</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('projectCat')">+ Add</button>
+            </div>
+            <div class="form-group" style="padding:10px 14px 0;"><select id="ref-proj-filter" onchange="renderRefProjCats()" style="font-size:12px;padding:5px 8px;"><option value="">All Projects</option></select></div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Project</th><th></th></tr></thead>
+            <tbody id="ref-projcat-tbody"></tbody></table></div>
+          </div>
+
+          <!-- Activities -->
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>Activities (Level 2)</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('activity')">+ Add</button>
+            </div>
+            <div class="form-group" style="padding:10px 14px 0;"><select id="ref-rc-filter" onchange="renderRefActivities()" style="font-size:12px;padding:5px 8px;"><option value="">All RCs</option></select></div>
+            <div class="table-scroll"><table><thead><tr><th>Activity</th><th>RC</th><th></th></tr></thead>
+            <tbody id="ref-act-tbody"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: ACCOUNT CODES -->
+      <div id="ref-accounts" style="display:none;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>1 – Personnel Services</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('accountCode',1)">+ Add</button>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th></th></tr></thead><tbody id="ref-ac1-tbody"></tbody></table></div>
+          </div>
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>2 – MOOE</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('accountCode',2)">+ Add</button>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th></th></tr></thead><tbody id="ref-ac2-tbody"></tbody></table></div>
+          </div>
+          <div class="table-card">
+            <div class="table-card-header" style="justify-content:space-between;">
+              <h3>3 – Capital Outlay</h3>
+              <button class="btn btn-primary btn-xs" onclick="openRefModal('accountCode',3)">+ Add</button>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Code</th><th></th></tr></thead><tbody id="ref-ac3-tbody"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<!-- ════════════════════════════════════════
+         SYSTEM SETTINGS SECTION
+    ═══════════════════════════════════════════ -->
+    <div class="section" id="sec-sysconfig">
+
+      <!-- Page header: title + subtitle stacked on left -->
+      <div class="section-header">
+        <h1>System Settings</h1>
+        <p>Configure system-wide preferences, security, display options, and database connection</p>
+      </div>
+
+      <div class="ss-shell">
+
+        <!-- ══ LEFT NAV ══════════════════════════════════════════════ -->
+        <div class="ss-left">
+          <div class="ss-nav-label">Settings</div>
+
+          <button class="ss-nav-btn active" onclick="sysTab('general')" id="stab-general">
+            <span class="ss-icon">🏛️</span>Agency Information
+          </button>
+          <button class="ss-nav-btn" onclick="sysTab('fiscal')" id="stab-fiscal">
+            <span class="ss-icon">📅</span>Fiscal Year
+          </button>
+          <button class="ss-nav-btn" onclick="sysTab('security')" id="stab-security">
+            <span class="ss-icon">🔐</span>Security &amp; PIN
+          </button>
+          <button class="ss-nav-btn" onclick="sysTab('display')" id="stab-display">
+            <span class="ss-icon">🎨</span>Display
+          </button>
+
+          <div class="ss-nav-sep"></div>
+
+          <button class="ss-nav-btn" onclick="sysTab('database')" id="stab-database">
+            <span class="ss-icon">🗄️</span>Database
+          </button>
+          <button class="ss-nav-btn" onclick="sysTab('backup')" id="stab-backup">
+            <span class="ss-icon">💾</span>Backup &amp; Restore
+          </button>
+
+          <div class="ss-nav-sep"></div>
+
+          <button class="ss-nav-btn" onclick="sysTab('about')" id="stab-about">
+            <span class="ss-icon">ℹ️</span>About
+          </button>
+        </div>
+
+        <!-- ══ RIGHT PANELS ══════════════════════════════════════════ -->
+        <div class="ss-right">
+
+          <!-- ── Agency Information ─────────────────────────────── -->
+          <div class="ss-panel active" id="spanel-general">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Agency Information</h2>
+                <p>Displayed on reports and document headers</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveAgencyInfo()">Save Changes</button>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Organization</div>
+                <div class="ss-form-grid cols-1" style="grid-template-columns:1fr;">
+                  <div class="ss-fg span2">
+                    <label class="ss-label">Agency / Department Name</label>
+                    <input class="ss-inp" type="text" id="cfg_agencyName" placeholder="e.g. Bureau of Fisheries and Aquatic Resources">
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="ss-fg">
+                      <label class="ss-label">Region / Division</label>
+                      <input class="ss-inp" type="text" id="cfg_region" placeholder="e.g. Region VIII – Eastern Visayas">
+                    </div>
+                    <div class="ss-fg">
+                      <label class="ss-label">Office / Unit</label>
+                      <input class="ss-inp" type="text" id="cfg_office" placeholder="e.g. Regional Office No. VIII">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Contact Details</div>
+                <div class="ss-form-grid" style="padding:0 20px 20px;">
+                  <div class="ss-fg">
+                    <label class="ss-label">Address Line 1</label>
+                    <input class="ss-inp" type="text" id="cfg_address1" placeholder="Street / Building">
+                  </div>
+                  <div class="ss-fg">
+                    <label class="ss-label">Address Line 2</label>
+                    <input class="ss-inp" type="text" id="cfg_address2" placeholder="City / Province / ZIP">
+                  </div>
+                  <div class="ss-fg">
+                    <label class="ss-label">Telephone / Fax</label>
+                    <input class="ss-inp" type="text" id="cfg_telephone" placeholder="(053) 321-0000">
+                  </div>
+                  <div class="ss-fg">
+                    <label class="ss-label">Email Address</label>
+                    <input class="ss-inp" type="email" id="cfg_email" placeholder="office@bfar.gov.ph">
+                  </div>
+                  <div class="ss-fg span2">
+                    <label class="ss-label">Website</label>
+                    <input class="ss-inp" type="url" id="cfg_website" placeholder="https://bfar.da.gov.ph">
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Fiscal Year ─────────────────────────────────────── -->
+          <div class="ss-panel" id="spanel-fiscal">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Fiscal Year</h2>
+                <p>Controls quarter labels and auto-numbering sequences</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveFiscalSettings()">Save Changes</button>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Year &amp; Numbering</div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Current Fiscal Year</strong>
+                    <span>Used for OBR numbering, earmark numbering, and report headers</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <select class="ss-sel" id="cfg_fiscalYear" style="width:100px;font-family:var(--mono);font-weight:700;" onchange="updateFYPreview()"></select>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>OBR Number Prefix</strong>
+                    <span>Prepended to all Obligation Reference Numbers</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <input class="ss-inp" type="text" id="cfg_obrPrefix" value="OBR" style="width:80px;font-family:var(--mono);font-weight:700;text-align:center;">
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Earmark Number Preview</strong>
+                    <span>Format: YY-MM-SEQUENCE</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <span class="ss-chip" id="cfg_fy_preview">25-04-0001</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Quarter Labels</div>
+                <div class="ss-qgrid">
+                  <div class="ss-qi"><span class="ss-qi-lbl">Q1 (Jan–Mar)</span><input class="ss-inp" type="text" id="cfg_q1" value="1ST Qtr"></div>
+                  <div class="ss-qi"><span class="ss-qi-lbl">Q2 (Apr–Jun)</span><input class="ss-inp" type="text" id="cfg_q2" value="2ND Qtr"></div>
+                  <div class="ss-qi"><span class="ss-qi-lbl">Q3 (Jul–Sep)</span><input class="ss-inp" type="text" id="cfg_q3" value="3RD Qtr"></div>
+                  <div class="ss-qi"><span class="ss-qi-lbl">Q4 (Oct–Dec)</span><input class="ss-inp" type="text" id="cfg_q4" value="4TH Qtr"></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Security & PIN ─────────────────────────────────── -->
+          <div class="ss-panel" id="spanel-security">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Security &amp; Override PIN</h2>
+                <p>Supervisor PIN required to manually edit auto-generated OBR and Earmark numbers</p>
+              </div>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Supervisor PIN</div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Current PIN</strong>
+                    <span>Stored in this browser — resets if browser data is cleared</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <span class="ss-pin" id="cfg_pin_dots">••••</span>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Change Override PIN</strong>
+                    <span>Must be 4–8 digits. Requires current PIN to change.</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <button class="btn btn-outline btn-sm" onclick="openChangePinDialog()">🔐 Change PIN</button>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Reset to Default</strong>
+                    <span>Resets PIN back to <strong>1234</strong>. Use if PIN is forgotten.</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-mid);" onclick="resetOverridePIN()">Reset to 1234</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Audit &amp; Behavior</div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Warn on Negative Balance</strong>
+                    <span>Block or warn when earmark/obligation exceeds allotment</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <label class="ss-tog"><input type="checkbox" id="cfg_balanceWarn" checked onchange="savePref('balanceWarn',this.checked)"><span class="ss-tog-track"></span></label>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Require Confirmation on Delete</strong>
+                    <span>Show confirm dialog before deleting any record</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <label class="ss-tog"><input type="checkbox" id="cfg_confirmDelete" checked onchange="savePref('confirmDelete',this.checked)"><span class="ss-tog-track"></span></label>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Show Timestamps on Records</strong>
+                    <span>Display created/updated time in view modals</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <label class="ss-tog"><input type="checkbox" id="cfg_showTimestamp" checked onchange="savePref('showTimestamp',this.checked)"><span class="ss-tog-track"></span></label>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Display ─────────────────────────────────────────── -->
+          <div class="ss-panel" id="spanel-display">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Display Preferences</h2>
+                <p>Visual and formatting options across the application</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveDisplayPrefs()">Apply</button>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Formatting</div>
+                <div class="ss-row">
+                  <div class="ss-row-l"><strong>Currency Symbol</strong><span>Shown before all monetary amounts</span></div>
+                  <div class="ss-row-r">
+                    <select class="ss-sel" id="cfg_currency" style="width:170px;" onchange="savePref('currency',this.value)">
+                      <option value="₱">₱ Philippine Peso</option>
+                      <option value="$">$ US Dollar</option>
+                      <option value="€">€ Euro</option>
+                      <option value="">None</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l"><strong>Date Format</strong><span>How dates display in tables and reports</span></div>
+                  <div class="ss-row-r">
+                    <select class="ss-sel" id="cfg_dateFormat" style="width:180px;" onchange="savePref('dateFormat',this.value)">
+                      <option value="MMM D, YYYY">Jan 1, 2025</option>
+                      <option value="MM/DD/YYYY">01/01/2025</option>
+                      <option value="DD/MM/YYYY">01/01/2025 (EU)</option>
+                      <option value="YYYY-MM-DD">2025-01-01 (ISO)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l"><strong>Records Per Page</strong><span>Rows shown per table before scrolling</span></div>
+                  <div class="ss-row-r">
+                    <select class="ss-sel" id="cfg_pageSize" style="width:90px;" onchange="savePref('pageSize',this.value)">
+                      <option value="25">25</option>
+                      <option value="50" selected>50</option>
+                      <option value="100">100</option>
+                      <option value="all">All</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Layout</div>
+                <div class="ss-row">
+                  <div class="ss-row-l"><strong>Compact Table Rows</strong><span>Reduce row padding for higher information density</span></div>
+                  <div class="ss-row-r">
+                    <label class="ss-tog"><input type="checkbox" id="cfg_compactRows" onchange="toggleCompactRows(this.checked)"><span class="ss-tog-track"></span></label>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-row-l"><strong>Show Workflow Steps in Sidebar</strong><span>5-step workflow guide at the bottom of the sidebar</span></div>
+                  <div class="ss-row-r">
+                    <label class="ss-tog"><input type="checkbox" id="cfg_showWorkflow" checked onchange="toggleWorkflowSidebar(this.checked)"><span class="ss-tog-track"></span></label>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Database ───────────────────────────────────────── -->
+          <div class="ss-panel" id="spanel-database">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Database</h2>
+                <p>Connection status and record statistics</p>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="pingDB()">🔄 Test Connection</button>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Connection</div>
+                <div class="ss-db-pill" id="db_info_row">
+                  <div class="ss-db-dot" id="db_info_dot"></div>
+                  <span id="db_info_text">Checking connection...</span>
+                </div>
+                <div class="ss-stats" style="grid-template-columns:repeat(3,1fr);">
+                  <div class="ss-stat"><label>Host</label><span style="font-size:13px;" id="db_cfg_host">localhost</span></div>
+                  <div class="ss-stat"><label>Port</label><span style="font-size:13px;" id="db_cfg_port">3306</span></div>
+                  <div class="ss-stat"><label>Database</label><span style="font-size:13px;" id="db_cfg_name">budget_registry</span></div>
+                  <div class="ss-stat"><label>User</label><span style="font-size:13px;" id="db_cfg_user">root</span></div>
+                  <div class="ss-stat"><label>Charset</label><span style="font-size:13px;">utf8mb4</span></div>
+                  <div class="ss-stat"><label>Status</label><span style="font-size:13px;" id="db_cfg_status">—</span></div>
+                </div>
+                <div style="padding:0 20px 16px;">
+                  <div class="alert alert-info" style="margin:0;">ℹ️ To change credentials, edit <strong>api/config.php</strong> and restart Apache.</div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Record Statistics</div>
+                <div class="ss-stats">
+                  <div class="ss-stat hi"><label>Responsibility Centers</label><span id="dbs_rc">—</span></div>
+                  <div class="ss-stat hi"><label>Allotments</label><span id="dbs_al">—</span></div>
+                  <div class="ss-stat hi"><label>Earmarks</label><span id="dbs_em">—</span></div>
+                  <div class="ss-stat hi"><label>Obligations</label><span id="dbs_ob">—</span></div>
+                  <div class="ss-stat hi"><label>Disbursements</label><span id="dbs_db">—</span></div>
+                  <div class="ss-stat"><label>Reference Items</label><span id="dbs_ref">—</span></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Backup & Restore ───────────────────────────────── -->
+          <div class="ss-panel" id="spanel-backup">
+            <div class="ss-panel-topbar">
+              <div>
+                <h2>Backup &amp; Restore</h2>
+                <p>Export your data as JSON or restore from a previous backup</p>
+              </div>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-card-label">Export</div>
+                <div class="ss-exp-grid">
+                  <button class="ss-exp-btn" onclick="exportAllData()">
+                    <div class="ss-exp-ic" style="background:var(--green-light);">📦</div>
+                    <div class="ss-exp-txt"><strong>Export All Data</strong><span>All modules + settings as JSON</span></div>
+                  </button>
+                  <button class="ss-exp-btn" onclick="exportData('refdata')">
+                    <div class="ss-exp-ic" style="background:var(--blue-light);">🗂️</div>
+                    <div class="ss-exp-txt"><strong>Reference Data</strong><span>Fund clusters, projects, codes</span></div>
+                  </button>
+                  <button class="ss-exp-btn" onclick="exportData('rc')">
+                    <div class="ss-exp-ic" style="background:var(--purple-light);">🏢</div>
+                    <div class="ss-exp-txt"><strong>RC Records</strong><span>Responsibility centers only</span></div>
+                  </button>
+                  <button class="ss-exp-btn" onclick="exportData('allotment')">
+                    <div class="ss-exp-ic" style="background:var(--cyan-light);">💰</div>
+                    <div class="ss-exp-txt"><strong>Allotments</strong><span>Allotment records only</span></div>
+                  </button>
+                  <button class="ss-exp-btn" onclick="exportData('earmark')">
+                    <div class="ss-exp-ic" style="background:var(--yellow-light);">📋</div>
+                    <div class="ss-exp-txt"><strong>Earmarks</strong><span>Earmark records only</span></div>
+                  </button>
+                  <button class="ss-exp-btn" onclick="exportData('obligation')">
+                    <div class="ss-exp-ic" style="background:var(--orange-light);">📝</div>
+                    <div class="ss-exp-txt"><strong>Obligations</strong><span>Obligation records only</span></div>
+                  </button>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Import / Restore</div>
+                <div class="ss-row">
+                  <div class="ss-row-l">
+                    <strong>Import JSON Backup</strong>
+                    <span style="color:var(--yellow);">⚠️ Merges with existing records — always export first</span>
+                  </div>
+                  <div class="ss-row-r">
+                    <button class="btn btn-outline btn-sm" onclick="$('backup_file_input').click()">📂 Choose File</button>
+                    <input type="file" id="backup_file_input" accept=".json" style="display:none" onchange="importBackupFile(this)">
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── About ─────────────────────────────────────────── -->
+          <div class="ss-panel" id="spanel-about">
+            <div class="ss-panel-topbar">
+              <h2>About</h2>
+              <p>System information and module overview</p>
+            </div>
+            <div class="ss-body">
+
+              <div class="ss-card">
+                <div class="ss-hero">
+                  <div class="ss-hero-logo">BR</div>
+                  <div class="ss-hero-text">
+                    <h3>Budget Registry System</h3>
+                    <p>Philippine Government Budget Management &nbsp;·&nbsp; v2.0.0</p>
+                  </div>
+                </div>
+                <div class="ss-badges">
+                  <span class="ss-badge bl">PHP 8 + MySQL</span>
+                  <span class="ss-badge bl">PDO / InnoDB</span>
+                  <span class="ss-badge bl">utf8mb4</span>
+                  <span class="ss-badge bl">REST API</span>
+                  <span class="ss-badge">XAMPP / Local</span>
+                </div>
+                <div class="ss-stats" style="grid-template-columns:repeat(3,1fr);padding-bottom:20px;">
+                  <div class="ss-stat"><label>Version</label><span style="font-size:13px;font-weight:600;">2.0.0</span></div>
+                  <div class="ss-stat"><label>Environment</label><span style="font-size:13px;" id="about_env">XAMPP</span></div>
+                  <div class="ss-stat"><label>Last Loaded</label><span style="font-size:11px;" id="about_loaded">—</span></div>
+                </div>
+              </div>
+
+              <div class="ss-card">
+                <div class="ss-card-label">Modules</div>
+                <div class="ss-row"><div class="ss-row-l"><strong>1. Responsibility Centers</strong><span>Org units with fund sources, expense classes, signatories</span></div><div class="ss-row-r"><span class="badge b-green">Active</span></div></div>
+                <div class="ss-row"><div class="ss-row-l"><strong>2. Allotments</strong><span>Budget allocation per RC with account code and activity breakdown</span></div><div class="ss-row-r"><span class="badge b-green">Active</span></div></div>
+                <div class="ss-row"><div class="ss-row-l"><strong>3. Earmarked Funds</strong><span>Reserved budget for specific procurement requests</span></div><div class="ss-row-r"><span class="badge b-green">Active</span></div></div>
+                <div class="ss-row"><div class="ss-row-l"><strong>4. Obligations</strong><span>Creditor, Mandatory, and Claims-type budget obligations</span></div><div class="ss-row-r"><span class="badge b-green">Active</span></div></div>
+                <div class="ss-row"><div class="ss-row-l"><strong>5. Disbursements</strong><span>Actual payments via Check or LDDAP-ADA</span></div><div class="ss-row-r"><span class="badge b-green">Active</span></div></div>
+              </div>
+
+            </div>
+          </div>
+
+        </div><!-- end ss-right -->
+      </div><!-- end ss-shell -->
+    </div><!-- end sec-sysconfig -->
+
+
+
+
+    <!-- ════════════════════════════════════════
+         REPORTS SECTION
+    ═══════════════════════════════════════════ -->
+    <div class="section" id="sec-reports">
+      <div class="section-header">
+        <h1>Reports</h1>
+        <p>Generate and filter budget execution reports across all modules</p>
+      </div>
+
+      <!-- ── Report Controls ── -->
+      <div class="report-controls">
+        <!-- Left: Group By + Filters -->
+        <div class="report-ctrl-top">
+          <div class="report-group-row">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 12px;background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--radius);font-size:11px;color:var(--blue);font-weight:500;line-height:1.6;">
+              <span style="font-weight:700;color:#1e3a5f;margin-right:4px">Hierarchy:</span>
+              <span>Fund Cluster</span><span style="opacity:.5">›</span>
+              <span>Financing Source</span><span style="opacity:.5">›</span>
+              <span>Authorization Code</span><span style="opacity:.5">›</span>
+              <span>Fund Category</span><span style="opacity:.5">›</span>
+              <span>Programs/Projects</span><span style="opacity:.5">›</span>
+              <span>Project Category</span><span style="opacity:.5">›</span>
+              <span>PAP/Sub-Category</span><span style="opacity:.5">›</span>
+              <span style="color:#15803d;font-weight:700">🏢 Responsibility Center</span><span style="opacity:.5">›</span>
+              <span>Expense Class</span><span style="opacity:.5">›</span>
+              <span>Account Code</span>
+            </div>
+          </div>
+          <div class="report-filter-row">
+            <!-- Filter 1: RC -->
+            <div class="report-filter-group">
+              <label class="report-ctrl-label">Responsibility Center</label>
+              <select id="rpt-filter-rc" onchange="rptRender()">
+                <option value="">All RCs</option>
+              </select>
+            </div>
+            <!-- Filter 2: Fund Cluster -->
+            <div class="report-filter-group">
+              <label class="report-ctrl-label">Fund Cluster</label>
+              <select id="rpt-filter-fc" onchange="rptRender()">
+                <option value="">All Clusters</option>
+              </select>
+            </div>
+            <!-- Filter 3: Expense Class -->
+            <div class="report-filter-group">
+              <label class="report-ctrl-label">Expense Class</label>
+              <select id="rpt-filter-ec" onchange="rptRender()">
+                <option value="">All Classes</option>
+                <option value="1">1 – Personnel Services</option>
+                <option value="2">2 – MOOE</option>
+                <option value="3">3 – Capital Outlay</option>
+              </select>
+            </div>
+            <!-- Filter 4: Period -->
+            <div class="report-filter-group">
+              <label class="report-ctrl-label">Quarter</label>
+              <select id="rpt-filter-qtr" onchange="rptRender()">
+                <option value="">All Quarters</option>
+                <option value="1ST Qtr">1ST Quarter</option>
+                <option value="2ND Qtr">2ND Quarter</option>
+                <option value="3RD Qtr">3RD Quarter</option>
+                <option value="4TH Qtr">4TH Quarter</option>
+              </select>
+            </div>
+            <!-- Filter 5: Obligation Type -->
+            <div class="report-filter-group">
+              <label class="report-ctrl-label">Obligation Type</label>
+              <select id="rpt-filter-type" onchange="rptRender()">
+                <option value="">All Types</option>
+                <option value="Mandatory">Mandatory</option>
+                <option value="Claims">Claims</option>
+                <option value="Creditor">Creditor</option>
+              </select>
+            </div>
+            <div class="report-filter-group" style="align-self:flex-end">
+              <button class="btn btn-outline btn-sm" onclick="rptResetFilters()">↺ Reset</button>
+              <button class="btn btn-outline btn-sm" onclick="rptSavePreset()">⭐ Save View</button>
+              <button class="btn btn-primary btn-sm" onclick="rptExportCSV()">↓ CSV</button>
+              <button class="btn btn-success btn-sm" onclick="rptPrint()">🖨 Print</button>
+            </div>
+          </div>
+        </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;font-weight:600;color:var(--text2)">Saved Views:</span>
+          <div id="rpt-presets-list" style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:var(--text3)">No saved presets</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Summary Cards (8 columns matching report) ── -->
+      <div class="rpt-summary-grid" id="rpt-summary-grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
+        <div class="rpt-sum-card rpt-sum-blue">
+          <div class="rpt-sum-label">Allotment Received</div>
+          <div class="rpt-sum-val" id="rpt-s-allotment">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card rpt-sum-purple">
+          <div class="rpt-sum-label">Current Year Obligations</div>
+          <div class="rpt-sum-val" id="rpt-s-obligations">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card rpt-sum-cyan">
+          <div class="rpt-sum-label">Current Year Disbursements</div>
+          <div class="rpt-sum-val" id="rpt-s-disbursements">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card rpt-sum-yellow">
+          <div class="rpt-sum-label">Unpaid Obligations</div>
+          <div class="rpt-sum-val" id="rpt-s-unpaid">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card rpt-sum-red">
+          <div class="rpt-sum-label">Unobligated Balance</div>
+          <div class="rpt-sum-val" id="rpt-s-unobligated">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card rpt-sum-orange">
+          <div class="rpt-sum-label">Total Earmarked</div>
+          <div class="rpt-sum-val" id="rpt-s-earmarked">₱0.00</div>
+        </div>
+        <div class="rpt-sum-card" style="background:var(--green-light);border-color:var(--green-mid);color:var(--green);">
+          <div class="rpt-sum-label">Balance (Remaining)</div>
+          <div class="rpt-sum-val" id="rpt-s-balance">₱0.00</div>
+        </div>
+      </div>
+
+      <!-- ── Report Table ── -->
+      <div class="table-card" style="margin-top:16px;" id="rpt-table-wrap">
+        <div class="table-card-header" style="justify-content:space-between;align-items:center;">
+          <h3 id="rpt-table-title">Budget Execution Report</h3>
+          <span id="rpt-row-count" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div class="table-scroll" id="rpt-scroll">
+          <table id="rpt-table">
+            <thead id="rpt-thead"></thead>
+            <tbody id="rpt-tbody"></tbody>
+            <tfoot id="rpt-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- end sec-reports -->
+
+  </div><!-- end .content -->
+</div><!-- end .main -->
+
+<!-- ════════════ RC MODAL ════════════ -->
+<div class="modal-overlay" id="rcModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h2 id="rcModalTitle">Add Responsibility Center</h2><button class="modal-close" onclick="closeModal('rcModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="rcForm" onsubmit="saveRC(event)">
+
+        <!-- Cat 1 -->
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">1</div><h3>Basic Information</h3></div>
+          <div class="form-section-body">
+            <div class="form-grid">
+              <div class="form-group"><label class="req">Date</label><input type="date" name="date" id="rc_date" required></div>
+              <div class="form-group"><label class="req">Authorization Type</label>
+                <select name="authType" id="rc_authType" required onchange="rcHandleAuthType()">
+                  <option value="">Select Type</option><option value="GAA">GAA</option><option value="SARO">SARO</option><option value="ASA">ASA</option>
+                </select>
+              </div>
+              <div class="form-group" id="rc_saroField" style="display:none"><label class="req">SARO Number</label><input type="text" name="saroNumber" id="rc_saroNum" placeholder="SARO-ROCS-24-0001"></div>
+              <div class="form-group" id="rc_asaField" style="display:none"><label class="req">ASA Number</label><input type="text" name="asaNumber" id="rc_asaNum" placeholder="ASA-24-001"></div>
+              <div class="form-group"><label class="req">Payee</label><input type="text" name="payee" id="rc_payee" list="dl_payee" required placeholder="Enter payee name"></div>
+              <div class="form-group col-2"><label class="req">Particulars</label><textarea name="particulars" id="rc_particulars" required placeholder="Describe the purpose"></textarea></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cat 2 -->
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">2</div><h3>Fund Source / Category</h3></div>
+          <div class="form-section-body">
+            <div class="form-grid">
+
+              <!-- Fund Cluster -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="req" style="margin:0">Fund Cluster</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('fundCluster')">+ Add New</button>
+                </div>
+                <select name="fundCluster" id="rc_fundCluster" required onchange="rcUpdateFundCluster()">
+                  <option value="">Select Fund Cluster</option>
+                </select>
+                <div class="qa-panel" id="qa-fundCluster" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-fc-code" placeholder="Code e.g. 03000000">
+                    <input type="text" class="qa-input" id="qa-fc-name" placeholder="Name e.g. Special Purpose Fund">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('fundCluster')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('fundCluster')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Financing Source -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="req" style="margin:0">Financing Source</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('financingSource')">+ Add New</button>
+                </div>
+                <select name="financingSource" id="rc_financingSource" required onchange="rcUpdateAuthCodes()">
+                  <option value="">Select Financing Source</option>
+                </select>
+                <div class="qa-panel" id="qa-financingSource" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-fs-code" placeholder="Code e.g. 01-0000">
+                    <input type="text" class="qa-input" id="qa-fs-name" placeholder="Name e.g. General Fund">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('financingSource')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('financingSource')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Authorization Code -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="req" style="margin:0">Authorization Code</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('authCode')">+ Add New</button>
+                </div>
+                <select name="authCode" id="rc_authCode" required onchange="rcUpdateFundCats()"><option value="">Select Auth Code</option></select>
+                <div class="qa-panel" id="qa-authCode" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-ac-code" placeholder="Code e.g. 01103000">
+                    <input type="text" class="qa-input" id="qa-ac-name" placeholder="Name e.g. Automatic Appropriations">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('authCode')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('authCode')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Fund Category -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="req" style="margin:0">Fund Category</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('fundCategory')">+ Add New</button>
+                </div>
+                <select name="fundCategory" id="rc_fundCategory" required onchange="rcUpdateFullFunding()"><option value="">Select Fund Category</option></select>
+                <div class="qa-panel" id="qa-fundCategory" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-cat-code" placeholder="Code e.g. 01101102">
+                    <input type="text" class="qa-input" id="qa-cat-name" placeholder="Name e.g. Specific Budget (Continuing)">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('fundCategory')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('fundCategory')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group"><label>Full Funding Source <span class="tag tag-auto">AUTO</span></label><input type="text" name="fullFundingSource" id="rc_fullFunding" readonly></div>
+
+              <!-- Department Code -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Department Code</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('deptCode')">+ Add New</button>
+                </div>
+                <select name="deptCode" id="rc_deptCode" onchange="rcUpdateAgencyCodes()">
+                  <option value="">Select Department Code</option>
+                </select>
+                <div class="qa-panel" id="qa-deptCode" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-dept-code" placeholder="Code e.g. 05-000-00-00000">
+                    <input type="text" class="qa-input" id="qa-dept-name" placeholder="Name e.g. Department of Agriculture">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('deptCode')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('deptCode')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Agency Code -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Agency Code</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('agencyCode')">+ Add New</button>
+                </div>
+                <select name="agencyCode" id="rc_agencyCode" onchange="rcUpdateOperatingUnits()">
+                  <option value="">Select Agency Code</option>
+                </select>
+                <div class="qa-panel" id="qa-agencyCode" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-agency-code" placeholder="Code e.g. 05-003-00-00000">
+                    <input type="text" class="qa-input" id="qa-agency-name" placeholder="Name e.g. BUREAU OF FISHERIES AND AQUATIC RESOURCES">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('agencyCode')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('agencyCode')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Operating Unit Classification -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Operating Unit Classification</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('operatingUnit')">+ Add New</button>
+                </div>
+                <select name="operatingUnit" id="rc_operatingUnit" onchange="rcUpdateLowerUnits()">
+                  <option value="">Select Operating Unit</option>
+                </select>
+                <div class="qa-panel" id="qa-operatingUnit" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-ou-code" placeholder="Code e.g. 05-003-03-00000">
+                    <input type="text" class="qa-input" id="qa-ou-name" placeholder="Name e.g. Regional Offices">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('operatingUnit')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('operatingUnit')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Lower Level Operating Unit -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Lower Level Operating Unit</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('lowerUnit')">+ Add New</button>
+                </div>
+                <select name="lowerUnit" id="rc_lowerUnit">
+                  <option value="">Select Lower Level Unit</option>
+                </select>
+                <div class="qa-panel" id="qa-lowerUnit" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-lu-code" placeholder="Code e.g. 05-003-03-00008">
+                    <input type="text" class="qa-input" id="qa-lu-name" placeholder="Name e.g. Region VIII">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('lowerUnit')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('lowerUnit')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group"><label class="req">Responsibility Center Name</label><input type="text" name="responsibilityCenter" id="rc_rcName" required list="dl_rc" placeholder="e.g. LH – SAMAR" oninput="rcUpdateActivities()"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cat 3 -->
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">3</div><h3>Program / Project</h3></div>
+          <div class="form-section-body">
+            <div class="form-grid">
+
+              <!-- Project/Program -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="req" style="margin:0">Project/Program</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('project')">+ Add New</button>
+                </div>
+                <select name="projectProgram" id="rc_project" required onchange="rcUpdateProjectCats()"><option value="">Select Project</option></select>
+                <div class="qa-panel" id="qa-project" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-proj-code" placeholder="Code e.g. 320100000000">
+                    <input type="text" class="qa-input" id="qa-proj-name" placeholder="Name e.g. Aquaculture Program">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('project')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('project')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Project Category -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Project Category</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('projectCat')">+ Add New</button>
+                </div>
+                <select name="projectCategory" id="rc_projectCat" onchange="rcUpdateProjectSubs()"><option value="">Select Category</option></select>
+                <div class="qa-panel" id="qa-projectCat" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-pcat-code" placeholder="Code e.g. 310103000000">
+                    <input type="text" class="qa-input" id="qa-pcat-name" placeholder="Name e.g. Capture Fisheries Sub-Program">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('projectCat')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('projectCat')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PAP / Sub-Category -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">PAP / Sub-Category</label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('projectSub')">+ Add New</button>
+                </div>
+                <select name="projectSubCategory" id="rc_projectSub"><option value="">Select Sub-Category</option></select>
+                <div class="qa-panel" id="qa-projectSub" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-psub-code" placeholder="Code e.g. 310103100001">
+                    <input type="text" class="qa-input" id="qa-psub-name" placeholder="Name e.g. Fish Production and Distribution">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('projectSub')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('projectSub')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Activity Level 2 -->
+              <div class="form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label style="margin:0">Activity Level 2 <small style="color:var(--text3);font-weight:400">(Ctrl+click for multiple)</small></label>
+                  <button type="button" class="btn-inline-add" onclick="rcQuickAdd('activity')">+ Add New</button>
+                </div>
+                <select name="activityLevel" id="rc_activity" multiple size="4" style="height:auto"></select>
+                <div class="qa-panel" id="qa-activity" style="display:none">
+                  <div class="qa-row">
+                    <input type="text" class="qa-input" id="qa-act-name" placeholder="Activity name e.g. Fish Cage Operations" style="flex:1">
+                    <button type="button" class="qa-save" onclick="rcQuickSave('activity')">Save</button>
+                    <button type="button" class="qa-cancel" onclick="rcQuickClose('activity')">✕</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Cat 4 — Modern Expense Classes -->
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">4</div><h3>Expense Classes & Account Codes</h3></div>
+          <div class="form-section-body">
+            <div class="ec-container">
+
+              <!-- EC 1 -->
+              <div class="ec-card" id="ec_card_1">
+                <div class="ec-card-toggle" onclick="toggleEC(1)">
+                  <div class="ec-check-box" id="ec_chkbox_1"></div>
+                  <div class="ec-icon ec-icon-1">👤</div>
+                  <div class="ec-title">
+                    <strong>1 – Personnel Services</strong>
+                    <small>Salaries, wages &amp; personnel benefits</small>
+                  </div>
+                  <span class="ec-badge" id="ec_badge_1">0 selected</span>
+                  <input type="checkbox" class="ec-checkbox" name="ec1" id="ec_chk_1" value="1 - Personnel Services">
+                </div>
+                <div class="ec-body" id="ec_body_1">
+                  <div class="ec-body-head">
+                    <span>Account Codes</span>
+                    <button type="button" class="btn-inline-add" onclick="ecToggleAddPanel(1, event)">+ Add Code</button>
+                  </div>
+                  <!-- Quick-add popover -->
+                  <div class="ec-qa-panel" id="ec_qa_1" style="display:none">
+                    <div class="ec-qa-row">
+                      <div class="ec-qa-fields">
+                        <input type="text" class="qa-input" id="ec_qa_code_1" placeholder="Code e.g. 5-01-04-010" style="flex:1;min-width:140px">
+                        <input type="text" class="qa-input" id="ec_qa_desc_1" placeholder="Description e.g. Retirement Benefits" style="flex:2;min-width:180px">
+                      </div>
+                      <div class="ec-qa-actions">
+                        <button type="button" class="qa-save" onclick="ecQuickAddSave(1)">Save</button>
+                        <button type="button" class="qa-cancel" onclick="ecCloseAddPanel(1)">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ac-grid" id="ac_list_1"></div>
+                  <div id="ec_empty_1" class="ec-empty-hint" style="display:none">No account codes yet. Click <strong>+ Add Code</strong> to add one.</div>
+                </div>
+              </div>
+
+              <!-- EC 2 -->
+              <div class="ec-card" id="ec_card_2">
+                <div class="ec-card-toggle" onclick="toggleEC(2)">
+                  <div class="ec-check-box" id="ec_chkbox_2"></div>
+                  <div class="ec-icon ec-icon-2">🔧</div>
+                  <div class="ec-title">
+                    <strong>2 – Maintenance &amp; Other Operating Expenses</strong>
+                    <small>Travel, supplies, utilities &amp; services</small>
+                  </div>
+                  <span class="ec-badge" id="ec_badge_2">0 selected</span>
+                  <input type="checkbox" class="ec-checkbox" name="ec2" id="ec_chk_2" value="2 - Maintenance and Other Operating Expenses">
+                </div>
+                <div class="ec-body" id="ec_body_2">
+                  <div class="ec-body-head">
+                    <span>Account Codes</span>
+                    <button type="button" class="btn-inline-add" onclick="ecToggleAddPanel(2, event)">+ Add Code</button>
+                  </div>
+                  <!-- Quick-add popover -->
+                  <div class="ec-qa-panel" id="ec_qa_2" style="display:none">
+                    <div class="ec-qa-row">
+                      <div class="ec-qa-fields">
+                        <input type="text" class="qa-input" id="ec_qa_code_2" placeholder="Code e.g. 5-01-04-010" style="flex:1;min-width:140px">
+                        <input type="text" class="qa-input" id="ec_qa_desc_2" placeholder="Description e.g. Retirement Benefits" style="flex:2;min-width:180px">
+                      </div>
+                      <div class="ec-qa-actions">
+                        <button type="button" class="qa-save" onclick="ecQuickAddSave(2)">Save</button>
+                        <button type="button" class="qa-cancel" onclick="ecCloseAddPanel(2)">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ac-grid" id="ac_list_2"></div>
+                  <div id="ec_empty_2" class="ec-empty-hint" style="display:none">No account codes yet. Click <strong>+ Add Code</strong> to add one.</div>
+                </div>
+              </div>
+
+              <!-- EC 3 -->
+              <div class="ec-card" id="ec_card_3">
+                <div class="ec-card-toggle" onclick="toggleEC(3)">
+                  <div class="ec-check-box" id="ec_chkbox_3"></div>
+                  <div class="ec-icon ec-icon-3">🏗️</div>
+                  <div class="ec-title">
+                    <strong>3 – Capital Outlay</strong>
+                    <small>Equipment, infrastructure &amp; ICT assets</small>
+                  </div>
+                  <span class="ec-badge" id="ec_badge_3">0 selected</span>
+                  <input type="checkbox" class="ec-checkbox" name="ec3" id="ec_chk_3" value="3 - Capital Outlay">
+                </div>
+                <div class="ec-body" id="ec_body_3">
+                  <div class="ec-body-head">
+                    <span>Account Codes</span>
+                    <button type="button" class="btn-inline-add" onclick="ecToggleAddPanel(3, event)">+ Add Code</button>
+                  </div>
+                  <!-- Quick-add popover -->
+                  <div class="ec-qa-panel" id="ec_qa_3" style="display:none">
+                    <div class="ec-qa-row">
+                      <div class="ec-qa-fields">
+                        <input type="text" class="qa-input" id="ec_qa_code_3" placeholder="Code e.g. 5-01-04-010" style="flex:1;min-width:140px">
+                        <input type="text" class="qa-input" id="ec_qa_desc_3" placeholder="Description e.g. Retirement Benefits" style="flex:2;min-width:180px">
+                      </div>
+                      <div class="ec-qa-actions">
+                        <button type="button" class="qa-save" onclick="ecQuickAddSave(3)">Save</button>
+                        <button type="button" class="qa-cancel" onclick="ecCloseAddPanel(3)">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ac-grid" id="ac_list_3"></div>
+                  <div id="ec_empty_3" class="ec-empty-hint" style="display:none">No account codes yet. Click <strong>+ Add Code</strong> to add one.</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Cat 5 — Signatories -->
+        <div class="form-section">
+          <div class="form-section-head" style="justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:10px;"><div class="fsn">5</div><h3>Signatories</h3></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="rcAddSignatory()">+ Add Signatory</button>
+          </div>
+          <div class="form-section-body">
+            <div id="rc_signatoryList"></div>
+            <div id="rc_signatory_empty" style="text-align:center;padding:14px;color:var(--text3);font-size:12px;background:var(--surface);border-radius:var(--radius);border:1px dashed var(--border2);">
+              No signatories added yet. Click <strong>+ Add Signatory</strong> to add one.
+            </div>
+          </div>
+        </div>
+
+        <input type="hidden" name="_editId" id="rc_editId">
+        <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal('rcModal')">Cancel</button><button type="submit" class="btn btn-primary">Save RC</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ ALLOTMENT MODAL ════════════ -->
+<div class="modal-overlay" id="allotmentModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h2 id="alModalTitle">Add Allotment</h2><button class="modal-close" onclick="closeModal('allotmentModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="allotmentForm" onsubmit="saveAllotment(event)">
+        <div class="alert alert-info">ℹ️ Sections 2 & 3 are auto-filled from the selected RC. Allocations should not exceed the Authorized Appropriation.</div>
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">1</div><h3>Select Responsibility Center</h3></div>
+          <div class="form-section-body">
+            <div class="form-group"><label class="req">Responsibility Center</label><select name="rcId" id="al_rcId" required onchange="alLoadRC()"><option value="">Select RC</option></select></div>
+          </div>
+        </div>
+        <div class="form-section" id="al_cat2" style="display:none">
+          <div class="form-section-head"><div class="fsn">2</div><h3>Fund Source <span class="tag tag-ro">FROM RC</span></h3></div>
+          <div class="form-section-body"><div class="form-grid form-grid-3">
+            <div class="form-group"><label>Fund Cluster</label><input type="text" id="al_fundCluster" readonly></div>
+            <div class="form-group"><label>Auth Code</label><input type="text" id="al_authCode" readonly></div>
+            <div class="form-group"><label>Fund Category</label><input type="text" id="al_fundCat" readonly></div>
+            <div class="form-group"><label>RC Name</label><input type="text" id="al_rcName" readonly></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="al_cat3" style="display:none">
+          <div class="form-section-head"><div class="fsn">3</div><h3>Program / Project <span class="tag tag-ro">FROM RC</span></h3></div>
+          <div class="form-section-body"><div class="form-grid form-grid-3">
+            <div class="form-group"><label>Project</label><input type="text" id="al_project" readonly></div>
+            <div class="form-group"><label>Category</label><input type="text" id="al_projectCat" readonly></div>
+            <div class="form-group"><label>Sub-Category</label><input type="text" id="al_projectSub" readonly></div>
+            <div class="form-group"><label>Activity</label><input type="text" id="al_activity" readonly></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="al_cat4" style="display:none">
+          <div class="form-section-head"><div class="fsn">4</div><h3>Allotment Amounts</h3></div>
+          <div class="form-section-body">
+            <!-- Balance warning bar -->
+            <div id="al_balance_bar" style="display:none" class="balance-bar"></div>
+            <div class="form-grid">
+            <div class="form-group"><label class="req">1. Authorized Appropriation</label><input type="text" inputmode="decimal" name="authorizedAppropriation" id="al_authApp" required data-fmt="num" autocomplete="off" oninput="alCalc()"></div>
+            <div class="form-group"><label class="req">2. Adjustment (±)</label><input type="text" inputmode="decimal" name="adjustment" id="al_adjust" data-fmt="num" autocomplete="off" oninput="alCalc()"></div>
+            <div class="form-group"><label>3. Adjusted Appropriation <span class="tag tag-auto">AUTO</span></label><input type="text" id="al_adjApp" readonly data-fmt="num"></div>
+            <div class="form-group"><label class="req">4. Allotment Received</label><input type="text" inputmode="decimal" name="allotmentReceived" id="al_received" required data-fmt="num" autocomplete="off" oninput="alCalc()"></div>
+            <div class="form-group"><label>5. Unreleased <span class="tag tag-auto">AUTO</span></label><input type="text" id="al_unrel" readonly data-fmt="num"></div>
+            <div class="form-group"><label>6. Per RC <span class="tag tag-auto">= #1</span></label><input type="text" id="al_perRC" readonly data-fmt="num"></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="al_cat5" style="display:none">
+          <div class="form-section-head" style="justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px"><div class="fsn">5</div><h3>Allotment per Account Code <span class="tag tag-ro">FROM RC</span></h3></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="alAddAccountCode()">+ Add Custom</button>
+          </div>
+          <div class="form-section-body">
+            <div id="al_acList"></div>
+            <div id="al_ac_empty" style="display:none;text-align:center;padding:18px;color:var(--text3);font-size:13px;background:var(--surface);border-radius:var(--radius);border:1px dashed var(--border2)">
+              No account codes registered in this RC. Go to <strong>Responsibility Centers → Section 4</strong> to add expense classes and account codes first.
+            </div>
+            <div class="total-box tb-green" id="al_acTotal" style="display:none"></div>
+          </div>
+        </div>
+        <div class="form-section" id="al_cat6" style="display:none">
+          <div class="form-section-head" style="justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px"><div class="fsn">6</div><h3>Allotment per Activity <span class="tag tag-ro">FROM RC</span></h3></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="alAddActivity()">+ Add Custom</button>
+          </div>
+          <div class="form-section-body">
+            <div id="al_actList"></div>
+            <div id="al_act_empty" style="display:none;text-align:center;padding:18px;color:var(--text3);font-size:13px;background:var(--surface);border-radius:var(--radius);border:1px dashed var(--border2)">
+              No activities registered in this RC. Go to <strong>Responsibility Centers → Section 3</strong> to add activities first.
+            </div>
+            <div class="total-box tb-green" id="al_actTotal" style="display:none"></div>
+          </div>
+        </div>
+        <input type="hidden" name="_editId" id="al_editId">
+        <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal('allotmentModal')">Cancel</button><button type="submit" class="btn btn-cyan">Save Allotment</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ EARMARK MODAL ════════════ -->
+<div class="modal-overlay" id="earmarkModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h2 id="emModalTitle">Add Earmark</h2><button class="modal-close" onclick="closeModal('earmarkModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="earmarkForm" onsubmit="saveEarmark(event)">
+        <!-- Balance warning -->
+        <div id="em_balance_bar" style="display:none" class="balance-bar"></div>
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">1</div><h3>Basic Information</h3></div>
+          <div class="form-section-body"><div class="form-grid">
+            <div class="form-group"><label class="req">Date</label><input type="date" name="date" id="em_date" required onchange="emUpdateQuarter()"></div>
+            <div class="form-group"><label>Quarter <span class="tag tag-auto">AUTO</span></label><input type="text" id="em_quarter" readonly></div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:6px;">
+                Earmark # <span class="tag tag-auto">AUTO</span>
+                <span class="field-override-badge" id="em_number_badge">EDITED</span>
+              </label>
+              <div class="field-lock-wrap">
+                <input type="text" id="em_number" readonly name="earmarkNumber">
+                <button type="button" class="lock-btn" id="em_number_lock"
+                  title="Click to override with supervisor PIN"
+                  onclick="triggerPinOverride('em_number')">🔒</button>
+              </div>
+            </div>
+            <div class="form-group"><label class="req">Responsibility Center</label><select name="rcId" id="em_rcId" required onchange="emLoadRC()"><option value="">Select RC (must have allotment)</option></select></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="em_cat2" style="display:none">
+          <div class="form-section-head"><div class="fsn">2</div><h3>Fund Source <span class="tag tag-ro">FROM RC</span></h3></div>
+          <div class="form-section-body"><div class="form-grid form-grid-3">
+            <div class="form-group"><label>Fund Cluster</label><input type="text" id="em_fundCluster" readonly></div>
+            <div class="form-group"><label>Auth Code</label><input type="text" id="em_authCode" readonly></div>
+            <div class="form-group"><label>Fund Category</label><input type="text" id="em_fundCat" readonly></div>
+            <div class="form-group"><label>RC Name</label><input type="text" id="em_rcName" readonly></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="em_cat3" style="display:none">
+          <div class="form-section-head" style="justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px"><div class="fsn">3</div><h3>Purchase Request Details</h3></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="emAddLot()">+ Add Lot/Item</button>
+          </div>
+          <div class="form-section-body">
+            <div id="em_lotList"></div>
+            <div class="total-box tb-green" id="em_totalBox" style="display:none"></div>
+          </div>
+        </div>
+        <input type="hidden" name="_editId" id="em_editId">
+        <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal('earmarkModal')">Cancel</button><button type="submit" class="btn btn-warning">Save Earmark</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ OBLIGATION MODAL ════════════ -->
+<div class="modal-overlay" id="obligationModal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h2 id="obModalTitle">Add Obligation</h2><button class="modal-close" onclick="closeModal('obligationModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="obligationForm" onsubmit="saveObligation(event)">
+        <!-- Balance warning -->
+        <div id="ob_balance_bar" style="display:none" class="balance-bar"></div>
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">1</div><h3>Basic Information</h3></div>
+          <div class="form-section-body"><div class="form-grid">
+            <div class="form-group"><label class="req">Date</label><input type="date" name="date" id="ob_date" required onchange="obUpdateQuarterOBR()"></div>
+            <div class="form-group"><label>Quarter <span class="tag tag-auto">AUTO</span></label><input type="text" id="ob_quarter" readonly></div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:6px;">
+                OBR Number <span class="tag tag-auto">AUTO</span>
+                <span class="field-override-badge" id="ob_obrNum_badge">EDITED</span>
+              </label>
+              <div class="field-lock-wrap">
+                <input type="text" id="ob_obrNum" readonly>
+                <button type="button" class="lock-btn" id="ob_obrNum_lock"
+                  title="Click to override with supervisor PIN"
+                  onclick="triggerPinOverride('ob_obrNum')">🔒</button>
+              </div>
+            </div>
+            <div class="form-group"><label class="req">Obligation Type</label>
+              <select name="obligationType" id="ob_type" required onchange="obHandleType()">
+                <option value="">Select Type</option><option value="Mandatory">Mandatory</option><option value="Claims">Claims</option><option value="Creditor">Creditor</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="req">Payee</label><input type="text" name="payee" id="ob_payee" list="dl_payee" required></div>
+            <div class="form-group" id="ob_rcField" style="display:none"><label class="req">Responsibility Center</label><select name="rcId" id="ob_rcId" onchange="obLoadRC()"><option value="">Select RC</option></select></div>
+            <div class="form-group" id="ob_earmarkField" style="display:none"><label class="req">Earmark #</label><select name="earmarkId" id="ob_earmarkId" onchange="obLoadEarmark()"><option value="">Select Earmark</option></select></div>
+            <div class="form-group" id="ob_pojoField" style="display:none"><label class="req">PO/JO Number</label><input type="text" name="pojoNumber" id="ob_pojo"></div>
+            <div class="form-group col-2"><label class="req">Particulars</label><textarea name="particulars" id="ob_particulars" required></textarea></div>
+          </div>
+          <!-- Lot & Entry selector — multi-select for Creditor obligations -->
+          <div id="ob_lotSection" style="display:none;margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">Select Lots &amp; Entries to Obligate</span>
+                <span class="badge b-yellow" style="font-size:11px">Check entries across lots — unselected remain in Earmark</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:var(--text3);">Selected total:</span>
+                <span id="ob_selected_total" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);">₱0.00</span>
+              </div>
+            </div>
+            <div id="ob_lotCards" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          </div>
+        </div>
+        <!-- Section 2: RC / Fund Details -->
+        <div class="form-section" id="ob_cat2" style="display:none">
+          <div class="form-section-head">
+            <div class="fsn">2</div>
+            <h3 id="ob_cat2_title">RC / Fund Details</h3>
+          </div>
+          <div class="form-section-body"><div class="form-grid form-grid-3">
+            <div class="form-group"><label>RC Name</label><input type="text" id="ob_rcName" readonly></div>
+            <div class="form-group"><label>Fund Cluster</label><input type="text" id="ob_fundCluster" readonly></div>
+            <div class="form-group"><label>Auth Code</label><input type="text" id="ob_authCode" readonly></div>
+          </div></div>
+        </div>
+
+        <!-- Section 3: Obligation Details -->
+        <div class="form-section" id="ob_cat3" style="display:none">
+          <div class="form-section-head">
+            <div class="fsn">3</div>
+            <h3 id="ob_cat3_title">Obligation Details</h3>
+          </div>
+          <div class="form-section-body">
+
+            <!-- ── Creditor only: earmark summary + entries breakdown ── -->
+            <div id="ob_cat3_earmark_info" style="display:none;margin-bottom:14px;">
+              <div class="alert alert-info" style="margin-bottom:10px;">
+                ℹ️ Details are pre-filled from your selected entries. Only <strong>Obligation Incurred</strong> can be edited.
+              </div>
+              <div class="form-grid form-grid-3" style="margin-bottom:12px;">
+                <div class="form-group"><label>Earmark Total</label><input type="text" id="ob_em_total" readonly style="font-family:var(--mono);font-weight:600;color:var(--green)"></div>
+                <div class="form-group"><label>Selected Entries</label><input type="text" id="ob_em_lot" readonly></div>
+                <div class="form-group"><label>Selected Total</label><input type="text" id="ob_em_lot_total" readonly style="font-family:var(--mono);font-weight:600;color:var(--blue)"></div>
+              </div>
+              <div id="ob_selected_entries_table" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
+                <div style="background:var(--surface);padding:8px 12px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;border-bottom:1px solid var(--border);">
+                  <span>#</span><span>Particulars</span><span>Account Code</span><span>Activity</span><span>Amount</span>
+                </div>
+                <div id="ob_selected_entries_body"></div>
+              </div>
+            </div>
+
+            <!-- ── Mandatory only: Utility Account Numbers ── -->
+            <div id="ob_utility_section" style="display:none;margin-bottom:14px;">
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Utility Account Numbers</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>⚡ Electricity Bill Account No.</label>
+                  <input type="text" name="utilityElecAcct" id="ob_elec_acct" placeholder="e.g. 123-456-789-000">
+                </div>
+                <div class="form-group">
+                  <label>💧 Water Bill Account No.</label>
+                  <input type="text" name="utilityWaterAcct" id="ob_water_acct" placeholder="e.g. 987-654-321-000">
+                </div>
+              </div>
+              <div class="divider"></div>
+            </div>
+
+            <!-- ── Common fields ── -->
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="req">Obligation Incurred</label>
+                <input type="text" inputmode="decimal" name="obligationIncurred" id="ob_amount" required data-fmt="num" autocomplete="off" placeholder="0.00" oninput="obCheckBalance();obUpdateACHint();">
+                <small id="ob_amount_hint" style="color:var(--text3);font-size:11px;margin-top:3px;display:none">Defaults to selected entries total — adjust if needed</small>
+              </div>
+              <div class="form-group">
+                <label id="ob_ac_label">Account Code</label>
+                <select name="accountCode" id="ob_accountCode" onchange="obUpdateACHint();obDeriveExpenseClassFromAC(this.value);"><option value="">Select Account Code</option></select>
+                <small id="ob_ac_hint" style="color:var(--text3);font-size:11px;margin-top:3px;display:none"></small>
+              </div>
+              <div class="form-group">
+                <label id="ob_act_label">Activity Level 2</label>
+                <select name="activity" id="ob_activity">
+                  <option value="">Select Activity</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label id="ob_ec_label">Expense Class</label>
+                <select name="expenseClass" id="ob_expClass">
+                  <option value="">Select Expense Class</option>
+                  <option value="1 - Personnel Services">1 – Personnel Services</option>
+                  <option value="2 - MOOE">2 – MOOE</option>
+                  <option value="3 - Capital Outlay">3 – Capital Outlay</option>
+                </select>
+              </div>
+            </div>
+            <!-- Hidden field for Creditor multi-entry selection -->
+            <input type="hidden" id="ob_selected_entries_json" name="selectedEntriesJson" value="[]">
+          </div>
+        </div>
+        <input type="hidden" name="_editId" id="ob_editId">
+        <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal('obligationModal')">Cancel</button><button type="submit" class="btn btn-purple">Save Obligation</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ DISBURSEMENT MODAL ════════════ -->
+<div class="modal-overlay" id="disbursementModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="dbModalTitle">Add Disbursement</h2><button class="modal-close" onclick="closeModal('disbursementModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="disbursementForm" onsubmit="saveDisbursement(event)">
+        <div class="form-section">
+          <div class="form-section-head"><div class="fsn">1</div><h3>Select Obligation</h3></div>
+          <div class="form-section-body"><div class="form-group"><label class="req">Obligation (OBR #)</label><select name="obligationId" id="db_obligId" required onchange="dbLoadObligation()"><option value="">Select Obligation</option></select></div></div>
+        </div>
+        <div id="db_balance_hint" class="alert alert-info" style="display:none;margin:0 0 10px"></div>
+        <div class="form-section" id="db_cat2" style="display:none">
+          <div class="form-section-head"><div class="fsn">2</div><h3>Obligation Details <span class="tag tag-ro">FROM OBLIGATION</span></h3></div>
+          <div class="form-section-body"><div class="form-grid">
+            <div class="form-group"><label>OBR Number</label><input type="text" id="db_obrNum" readonly></div>
+            <div class="form-group"><label>Payee</label><input type="text" id="db_payee" readonly></div>
+            <div class="form-group"><label>RC</label><input type="text" id="db_rc" readonly></div>
+            <div class="form-group"><label>Obligation Amount</label><input type="text" id="db_obligAmt" readonly></div>
+          </div></div>
+        </div>
+        <div class="form-section" id="db_cat3" style="display:none">
+          <div class="form-section-head"><div class="fsn">3</div><h3>Disbursement Details</h3></div>
+          <div class="form-section-body"><div class="form-grid">
+            <div class="form-group"><label class="req">Date</label><input type="date" name="date" id="db_date" required></div>
+            <div class="form-group"><label class="req">Check / LDDAP-ADA #</label><input type="text" name="checkNumber" id="db_checkNum" required list="dl_check_number" autocomplete="off" placeholder="CHK-2024-001"></div>
+            <div class="form-group"><label class="req">Net Disbursement</label><input type="text" inputmode="decimal" name="netDisbursement" id="db_net" required data-fmt="num" autocomplete="off" oninput="dbCalc()"></div>
+            <div class="form-group"><label>TRA Amount</label><input type="text" inputmode="decimal" name="traAmount" id="db_tra" data-fmt="num" autocomplete="off" oninput="dbCalc()"></div>
+            <div class="form-group col-2"><label>Total Disbursement <span class="tag tag-auto">AUTO</span></label><input type="text" id="db_total" readonly data-fmt="num"></div>
+          </div></div>
+        </div>
+        <input type="hidden" name="_editId" id="db_editId">
+        <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal('disbursementModal')">Cancel</button><button type="submit" class="btn btn-cyan">Save Disbursement</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW MODAL -->
+<div class="modal-overlay" id="viewModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="viewTitle">Record Details</h2><button class="modal-close" onclick="closeModal('viewModal')">✕</button></div>
+    <div class="modal-body" id="viewBody"></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('viewModal')">Close</button></div>
+  </div>
+</div>
+
+
+<!-- ════════════ REFERENCE DATA MODAL ════════════ -->
+<div class="modal-overlay" id="refModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="refModalTitle">Add Reference</h2><button class="modal-close" onclick="closeModal('refModal')">✕</button></div>
+    <div class="modal-body">
+      <form id="refForm" onsubmit="saveRefItem(event)">
+        <div id="refFormFields"></div>
+        <input type="hidden" id="ref_type">
+        <input type="hidden" id="ref_editKey">
+        <input type="hidden" id="ref_ecNum">
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('refModal')">Cancel</button>
+      <button type="submit" form="refForm" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- PIN OVERRIDE DIALOG -->
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-box">
+    <div style="font-size:28px;margin-bottom:10px;">🔐</div>
+    <h3 id="pinTitle">Override Required</h3>
+    <p id="pinDesc">Enter the supervisor PIN to manually edit this auto-generated field.</p>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-err" id="pinErr"></div>
+    <div class="pin-keypad">
+      <button type="button" class="pin-key" onclick="pinKey('1')">1</button>
+      <button type="button" class="pin-key" onclick="pinKey('2')">2</button>
+      <button type="button" class="pin-key" onclick="pinKey('3')">3</button>
+      <button type="button" class="pin-key" onclick="pinKey('4')">4</button>
+      <button type="button" class="pin-key" onclick="pinKey('5')">5</button>
+      <button type="button" class="pin-key" onclick="pinKey('6')">6</button>
+      <button type="button" class="pin-key" onclick="pinKey('7')">7</button>
+      <button type="button" class="pin-key" onclick="pinKey('8')">8</button>
+      <button type="button" class="pin-key" onclick="pinKey('9')">9</button>
+      <button type="button" class="pin-key del" onclick="pinCancel()">Cancel</button>
+      <button type="button" class="pin-key" onclick="pinKey('0')">0</button>
+      <button type="button" class="pin-key del" onclick="pinBackspace()">⌫</button>
+    </div>
+    <div class="pin-settings-link">Default PIN: <strong>1234</strong> &nbsp;·&nbsp; <a onclick="nav('settings');closePin();">Change PIN in Settings ⚙️</a></div>
+  </div>
+</div>
+
+<!-- ════════════ IMPORT MODAL ════════════ -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="importModalTitle">Import Data</h2>
+      <button class="modal-close" onclick="closeModal('importModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info" style="margin-bottom:14px">
+        ℹ️ Download the CSV template, fill in your data, then upload the file.
+        All existing data is preserved — import only adds new records.
+      </div>
+      <div class="form-section">
+        <div class="form-section-head"><div class="fsn">1</div><h3>Choose Module</h3></div>
+        <div class="form-section-body">
+          <div class="form-group">
+            <label>Module to Import</label>
+            <select id="import-module" onchange="importUpdateTemplate()">
+              <option value="rc">Responsibility Centers</option>
+              <option value="obligation">Obligations</option>
+              <option value="disbursement">Disbursements</option>
+            </select>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="importDownloadTemplate()" style="margin-top:8px">
+            ↓ Download CSV Template
+          </button>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-head"><div class="fsn">2</div><h3>Upload File</h3></div>
+        <div class="form-section-body">
+          <div class="form-group">
+            <label>CSV File</label>
+            <input type="file" id="import-file" accept=".csv" onchange="importPreview()">
+          </div>
+          <div id="import-preview" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('importModal')">Cancel</button>
+      <button class="btn btn-primary" id="import-save-btn" onclick="importSave()" disabled>Import Records</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">Confirm Action</h3>
+    <p id="confirmMsg"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" onclick="confirmResolve(false)">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmResolve(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Dynamically populated from saved records on every load -->
+<datalist id="dl_payee"></datalist>
+<datalist id="dl_rc"></datalist>
+<datalist id="dl_check_number"></datalist>
+
+<!-- ════════════ OBR PICKER MODAL ════════════ -->
+<div class="modal-overlay" id="obrSelectModal">
+  <div class="modal modal-lg" style="max-width:900px;">
+    <div class="modal-header">
+      <h2>🖨 Select OBR to Print</h2>
+      <button class="modal-close" onclick="closeModal('obrSelectModal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div class="search-wrap">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input class="search-input" id="obr-picker-search"
+            placeholder="Search OBR #, payee, RC, particulars..."
+            oninput="obrPickerFilter()">
+        </div>
+      </div>
+      <div id="obr-picker-list" style="max-height:500px;overflow-y:auto;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('obrSelectModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
